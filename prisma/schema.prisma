@@ -45,6 +45,7 @@ model User {
   acceptedCookies Boolean
   acceptedUpdates Boolean      @default(false)
   displayName     String
+  deletedAt       DateTime? // soft delete — משתמש מחוק לא יכול להתחבר
   createdAt       DateTime     @default(now())
   lessons         Lesson[]
 
