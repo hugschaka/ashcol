@@ -1,0 +1,137 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique // לזיהוי ב-URL, lowercase, ללא רווחים
+  domain    String? // תחום הארגון
+  createdAt DateTime @default(now())
+  users     User[]
+  lessons   Lesson[]
+}
+
+model Lead {
+  id        String   @id @default(cuid())
+  orgName   String
+  domain    String
+  interest  Interest // CONTENT / PARTNERSHIP / AI_INTEGRATION
+  email     String
+  handled   Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+enum Interest {
+  CONTENT
+  PARTNERSHIP
+  AI_INTEGRATION
+}
+
+model User {
+  id              String       @id @default(cuid())
+  email           String       @unique
+  passwordHash    String
+  role            Role // ADMIN / LECTURER / STUDENT
+  orgId           String
+  org             Organization @relation(fields: [orgId], references: [id])
+  emailVerified   Boolean      @default(false)
+  acceptedTerms   Boolean
+  acceptedCookies Boolean
+  acceptedUpdates Boolean      @default(false)
+  displayName     String
+  createdAt       DateTime     @default(now())
+  lessons         Lesson[]
+
+  @@index([orgId])
+}
+
+enum Role {
+  ADMIN
+  LECTURER
+  STUDENT
+}
+
+model Lesson {
+  id           String        @id @default(cuid())
+  title        String
+  rawContent   String        @db.Text
+  status       LessonStatus  @default(PROCESSING)
+  lecturerId   String
+  lecturer     User          @relation(fields: [lecturerId], references: [id])
+  orgId        String
+  org          Organization  @relation(fields: [orgId], references: [id])
+  notebookId   String? // מזהה המחברת ב-NotebookLM
+  errorMessage String? // אם הייצור נכשל
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  assets       LessonAsset[]
+  editRequests EditRequest[]
+
+  @@index([orgId, status])
+  @@index([lecturerId])
+}
+
+enum LessonStatus {
+  PROCESSING // בעיבוד אצל ה-worker
+  PENDING_APPROVAL // תוצרים מוכנים, מחכה לאישור מרצה
+  EDITING // נשלח לעריכה, מחכה לגרסה חדשה
+  APPROVED // מאושר — נראה לסטודנטים
+  FAILED // הייצור נכשל
+}
+
+model LessonAsset {
+  id        String    @id @default(cuid())
+  lessonId  String
+  lesson    Lesson    @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  type      AssetType
+  content   Json // התוצר עצמו (מבנה לפי type)
+  fileUrl   String? // אם התוצר הוא קובץ (מצגת PDF וכו')
+  approved  Boolean   @default(false)
+  version   Int       @default(1) // עולה בכל עריכה
+  createdAt DateTime  @default(now())
+
+  @@index([lessonId])
+}
+
+enum AssetType {
+  PRESENTATION
+  QUIZ
+  FLASHCARDS
+  INFOGRAPHIC
+}
+
+model EditRequest {
+  id        String     @id @default(cuid())
+  lessonId  String
+  lesson    Lesson     @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  assetType AssetType? // null = עריכה כללית
+  message   String     @db.Text
+  resolved  Boolean    @default(false)
+  createdAt DateTime   @default(now())
+}
+
+model Job {
+  id        String    @id @default(cuid())
+  type      String // "generate_lesson" / "edit_asset"
+  payload   Json
+  status    JobStatus @default(PENDING)
+  attempts  Int       @default(0)
+  error     String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([status, createdAt])
+}
+
+enum JobStatus {
+  PENDING
+  RUNNING
+  DONE
+  FAILED
+}
