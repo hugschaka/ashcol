@@ -1,5 +1,6 @@
 import "./env";
 import { prisma } from "./db";
+import { handleEditAsset } from "./handlers/edit-asset";
 import { handleGenerateLesson } from "./handlers/generate-lesson";
 
 const POLL_INTERVAL_MS = 10_000;
@@ -40,6 +41,24 @@ async function claimNextJob() {
   return prisma.job.findUnique({ where: { id: candidate.id } });
 }
 
+async function markEditFailed(payload: unknown) {
+  const editRequestId = (payload as { editRequestId?: string })?.editRequestId;
+  if (!editRequestId) return;
+  const editRequest = await prisma.editRequest
+    .update({ where: { id: editRequestId }, data: { resolved: true } })
+    .catch(() => null);
+  if (!editRequest) return;
+  await prisma.lesson
+    .update({
+      where: { id: editRequest.lessonId },
+      data: {
+        status: "PENDING_APPROVAL",
+        errorMessage: "העריכה נכשלה — התוצרים הקודמים נשמרו. אפשר לנסות שוב.",
+      },
+    })
+    .catch(() => {});
+}
+
 async function markLessonFailed(payload: unknown, errorMessage: string) {
   const lessonId = (payload as { lessonId?: string })?.lessonId;
   if (!lessonId) return;
@@ -59,8 +78,8 @@ async function processJob(job: NonNullable<Awaited<ReturnType<typeof claimNextJo
         await withTimeout(handleGenerateLesson(job.payload), JOB_TIMEOUT_MS);
         break;
       case "edit_asset":
-        // ימומש בשלב 6 (Review ועריכות)
-        throw new Error("edit_asset עוד לא ממומש");
+        await withTimeout(handleEditAsset(job.payload), JOB_TIMEOUT_MS);
+        break;
       default:
         throw new Error(`סוג job לא מוכר: ${job.type}`);
     }
@@ -79,10 +98,15 @@ async function processJob(job: NonNullable<Awaited<ReturnType<typeof claimNextJo
         where: { id: job.id },
         data: { status: "FAILED", error: message },
       });
-      await markLessonFailed(
-        job.payload,
-        "הייצור נכשל אחרי כמה ניסיונות. אפשר ליצור את השיעור מחדש או לפנות לתמיכה."
-      );
+      if (job.type === "edit_asset") {
+        // לשיעור יש תוצרים תקינים — חוזרים לאישור עם הודעת שגיאה במקום FAILED
+        await markEditFailed(job.payload);
+      } else {
+        await markLessonFailed(
+          job.payload,
+          "הייצור נכשל אחרי כמה ניסיונות. אפשר ליצור את השיעור מחדש או לפנות לתמיכה."
+        );
+      }
       log(`job ${job.id} | סומן FAILED אחרי ${job.attempts} ניסיונות`);
     } else {
       // חוזר לתור לניסיון נוסף

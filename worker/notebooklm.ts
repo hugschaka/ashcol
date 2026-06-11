@@ -90,6 +90,41 @@ function dryRunAssets(lessonTitle: string, prompts: AssetPrompts): GeneratedAsse
   ];
 }
 
+export type EditAssetArgs = {
+  orgSlug: string;
+  lecturerId: string;
+  lessonTitle: string;
+  assetType: AssetTypeName;
+  editPrompt: string;
+  baseContent: unknown;
+  notebookId?: string | null;
+};
+
+// עריכת תוצר קיים דרך הצ'אט של המחברת; dry_run מסמן את התוכן הקיים כמעודכן
+export async function generateEditedAsset(
+  args: EditAssetArgs
+): Promise<{ content: unknown }> {
+  if (workerMode() === "dry_run") {
+    const base =
+      args.baseContent && typeof args.baseContent === "object"
+        ? (args.baseContent as Record<string, unknown>)
+        : {};
+    return {
+      content: {
+        ...base,
+        dryRun: true,
+        revisionNote: "גרסה מעודכנת (dry-run) בעקבות בקשת עריכה",
+        editPromptUsed: args.editPrompt,
+        editedAt: new Date().toISOString(),
+      },
+    };
+  }
+
+  throw new Error(
+    "מצב real של NotebookLM עוד לא מחובר — נדרשת התחברות גוגל ל-notebooklm-py. בינתיים השתמשו ב-WORKER_MODE=dry_run"
+  );
+}
+
 export async function generateLessonAssets(args: GenerateArgs): Promise<GenerateResult> {
   if (workerMode() === "dry_run") {
     return {

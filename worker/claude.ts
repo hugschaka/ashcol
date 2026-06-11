@@ -35,6 +35,52 @@ function fallbackPrompts(title: string): AssetPrompts {
   };
 }
 
+const TYPE_LABELS_HE: Record<string, string> = {
+  PRESENTATION: "מצגת",
+  QUIZ: "שאלון",
+  FLASHCARDS: "כרטיסיות",
+  INFOGRAPHIC: "אינפוגרפיה",
+};
+
+// מנסח בקשת עריכה חופשית של מרצה לפרומפט ממוקד לצ'אט של המחברת
+export async function buildEditPrompt(
+  title: string,
+  assetType: string,
+  message: string
+): Promise<{ prompt: string; usedClaude: boolean }> {
+  const label = TYPE_LABELS_HE[assetType] ?? assetType;
+
+  if (!process.env.ANTHROPIC_API_KEY) {
+    return {
+      prompt: `עדכן את ה${label} של השיעור "${title}" לפי הבקשה הבאה: ${message}. שמור על המבנה והסגנון הקיימים, שנה רק את מה שהתבקש, והתבסס אך ורק על המקור שהועלה.`,
+      usedClaude: false,
+    };
+  }
+
+  const client = new Anthropic();
+  const response = await client.messages.create({
+    model: MODEL,
+    max_tokens: 2000,
+    thinking: { type: "adaptive" },
+    system:
+      "אתה מתרגם בקשות עריכה של מרצים לפרומפט אחד ממוקד עבור הצ'אט של NotebookLM, שיעדכן תוצר לימודי קיים. הפרומפט חייב: לציין בדיוק מה לשנות ומה להשאיר, לדרוש הסתמכות על המקור שהועלה בלבד, ולשמור על מבנה התוצר. השב עם הפרומפט בלבד, ללא הסברים.",
+    messages: [
+      {
+        role: "user",
+        content: `שיעור: "${title}"\nהתוצר לעריכה: ${label}\nבקשת המרצה: ${message}\n\nנסח את הפרומפט לצ'אט של המחברת.`,
+      },
+    ],
+  });
+
+  const text = response.content
+    .filter((block) => block.type === "text")
+    .map((block) => block.text)
+    .join("")
+    .trim();
+  if (!text) throw new Error("Claude לא החזיר פרומפט עריכה");
+  return { prompt: text, usedClaude: true };
+}
+
 export async function buildNotebookPrompts(
   title: string,
   rawContent: string
