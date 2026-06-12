@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-type Asset = { type: string; content: unknown };
+type Asset = { type: string; content: unknown; fileUrl?: string | null };
 
 const TYPE_META: Record<string, { label: string; icon: string }> = {
   PRESENTATION: { label: "מצגת", icon: "📊" },
@@ -39,14 +39,54 @@ export function AssetViewer({ assets }: { assets: Asset[] }) {
 
       {active && (
         <div className="rounded-2xl border border-neutral-200 p-4">
-          <Viewer type={active.type} content={active.content} />
+          <Viewer type={active.type} content={active.content} fileUrl={active.fileUrl} />
         </div>
       )}
     </div>
   );
 }
 
-function Viewer({ type, content }: { type: string; content: unknown }) {
+function Viewer({
+  type,
+  content,
+  fileUrl,
+}: {
+  type: string;
+  content: unknown;
+  fileUrl?: string | null;
+}) {
+  // תוצרים שהם קבצים (מ-NotebookLM האמיתי): PDF מוטמע / תמונה
+  if (fileUrl) {
+    if (type === "INFOGRAPHIC") {
+      return (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={fileUrl} alt="אינפוגרפיה" className="w-full rounded-xl" />
+      );
+    }
+    if (type === "PRESENTATION") {
+      return (
+        <div className="space-y-2">
+          <object data={fileUrl} type="application/pdf" className="w-full h-[70vh] rounded-xl">
+            <p className="text-sm text-neutral-500 p-4">
+              הדפדפן לא מציג PDF מוטמע —{" "}
+              <a href={fileUrl} target="_blank" rel="noreferrer" className="text-accent underline">
+                פתחו את המצגת בחלון חדש
+              </a>
+            </p>
+          </object>
+          <a
+            href={fileUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-block text-sm text-accent underline"
+          >
+            📎 פתיחה בחלון חדש / הורדה
+          </a>
+        </div>
+      );
+    }
+  }
+
   const c = content as Record<string, unknown> | null;
   if (!c || typeof c !== "object") {
     return <p className="text-neutral-400 text-center py-8">אין תוכן להצגה</p>;

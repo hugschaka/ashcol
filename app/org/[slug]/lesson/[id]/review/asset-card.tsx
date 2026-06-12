@@ -9,6 +9,7 @@ export type AssetForCard = {
   version: number;
   approved: boolean;
   content: unknown;
+  fileUrl?: string | null;
 };
 
 const TYPE_META: Record<string, { label: string; icon: string }> = {
@@ -105,6 +106,20 @@ export function AssetCard({
       </header>
 
       <div className="flex-1 rounded-xl bg-neutral-50 p-3 text-sm max-h-64 overflow-y-auto">
+        {asset.fileUrl &&
+          (asset.type === "INFOGRAPHIC" ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={asset.fileUrl} alt={meta.label} className="rounded-lg w-full mb-2" />
+          ) : (
+            <a
+              href={asset.fileUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="block text-accent underline mb-2"
+            >
+              📎 פתיחת הקובץ המלא
+            </a>
+          ))}
         <AssetPreview type={asset.type} content={asset.content} />
       </div>
 

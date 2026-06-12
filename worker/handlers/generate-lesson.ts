@@ -43,6 +43,7 @@ export async function handleGenerateLesson(payload: unknown): Promise<void> {
           lessonId: lesson.id,
           type: asset.type,
           content: asset.content as object,
+          fileUrl: asset.fileUrl ?? null,
         },
       });
     }

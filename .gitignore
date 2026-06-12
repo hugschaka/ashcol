@@ -37,6 +37,9 @@ yarn-error.log*
 # prisma generated client
 /generated/prisma
 
+# תוצרים שמיוצרים ע"י NotebookLM (קבצים כבדים)
+/public/generated
+
 # vercel
 .vercel
 

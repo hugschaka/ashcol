@@ -23,7 +23,11 @@ const getApprovedLesson = unstable_cache(
       lesson.assets.find((a) => a.type === type)
     )
       .filter((a): a is NonNullable<typeof a> => Boolean(a))
-      .map((a) => ({ type: a.type as string, content: a.content }));
+      .map((a) => ({
+        type: a.type as string,
+        content: a.content,
+        fileUrl: a.fileUrl,
+      }));
     return {
       id: lesson.id,
       title: lesson.title,

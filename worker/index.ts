@@ -4,7 +4,8 @@ import { handleEditAsset } from "./handlers/edit-asset";
 import { handleGenerateLesson } from "./handlers/generate-lesson";
 
 const POLL_INTERVAL_MS = 10_000;
-const JOB_TIMEOUT_MS = 10 * 60 * 1000; // 10 דקות לכל job
+// ייצור אמיתי ב-NotebookLM לוקח דקות ארוכות (4 תוצרים במקביל)
+const JOB_TIMEOUT_MS = Number(process.env.JOB_TIMEOUT_MINUTES ?? "25") * 60 * 1000;
 const MAX_ATTEMPTS = 3;
 
 function log(msg: string) {
@@ -48,12 +49,28 @@ async function markEditFailed(payload: unknown) {
     .update({ where: { id: editRequestId }, data: { resolved: true } })
     .catch(() => null);
   if (!editRequest) return;
+
+  // לא נוצרה גרסה חדשה — חוזרים לסטטוס שמשקף את מצב התוצרים הקיימים:
+  // אם כל הגרסאות האחרונות מאושרות השיעור נשאר מפורסם (APPROVED)
+  const assets = await prisma.lessonAsset.findMany({
+    where: { lessonId: editRequest.lessonId },
+    orderBy: { version: "desc" },
+    select: { type: true, approved: true },
+  });
+  const latestByType = new Map<string, boolean>();
+  for (const asset of assets) {
+    if (!latestByType.has(asset.type)) latestByType.set(asset.type, asset.approved);
+  }
+  const allApproved =
+    latestByType.size === 4 && [...latestByType.values()].every(Boolean);
+
   await prisma.lesson
     .update({
       where: { id: editRequest.lessonId },
       data: {
-        status: "PENDING_APPROVAL",
-        errorMessage: "העריכה נכשלה — התוצרים הקודמים נשמרו. אפשר לנסות שוב.",
+        status: allApproved ? "APPROVED" : "PENDING_APPROVAL",
+        errorMessage:
+          "העריכה נכשלה — התוצרים הקודמים נשמרו. אפשר לנסות לשלוח את הבקשה שוב.",
       },
     })
     .catch(() => {});
@@ -92,6 +109,26 @@ async function processJob(job: NonNullable<Awaited<ReturnType<typeof claimNextJo
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     log(`job ${job.id} | ✗ שגיאה: ${message}`);
+
+    // session של גוגל שפג לא יתוקן בניסיון חוזר — נכשלים מיד עם הודעה ברורה
+    const authExpired =
+      message.includes("Authentication expired") || message.includes("notebooklm login");
+    if (authExpired) {
+      await prisma.job.update({
+        where: { id: job.id },
+        data: { status: "FAILED", error: message },
+      });
+      if (job.type === "edit_asset") {
+        await markEditFailed(job.payload);
+      } else {
+        await markLessonFailed(
+          job.payload,
+          "חיבור NotebookLM פג תוקף — צריך להתחבר מחדש לחשבון הגוגל וליצור את השיעור שוב."
+        );
+      }
+      log(`job ${job.id} | חיבור NotebookLM פג — נדרש notebooklm login`);
+      return;
+    }
 
     if (job.attempts >= MAX_ATTEMPTS) {
       await prisma.job.update({

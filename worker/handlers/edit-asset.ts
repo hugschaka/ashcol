@@ -61,6 +61,7 @@ export async function handleEditAsset(payload: unknown): Promise<void> {
         lessonId: lesson.id,
         type,
         content: result.content as object,
+        fileUrl: result.fileUrl ?? null,
         version: (latest?.version ?? 0) + 1,
         // גרסה חדשה תמיד חוזרת לאישור המרצה
         approved: false,

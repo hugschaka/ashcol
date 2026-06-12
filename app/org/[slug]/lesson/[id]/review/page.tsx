@@ -91,6 +91,7 @@ export default async function ReviewPage({
                     version: asset.version,
                     approved: asset.approved,
                     content: asset.content,
+                    fileUrl: asset.fileUrl,
                   } satisfies AssetForCard
                 }
                 disabled={busy}

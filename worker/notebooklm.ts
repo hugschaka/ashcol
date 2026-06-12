@@ -1,3 +1,6 @@
+import { spawn } from "node:child_process";
+import { mkdirSync } from "node:fs";
+import path from "node:path";
 import type { AssetPrompts } from "./claude";
 
 export type AssetTypeName = "PRESENTATION" | "QUIZ" | "FLASHCARDS" | "INFOGRAPHIC";
@@ -5,6 +8,7 @@ export type AssetTypeName = "PRESENTATION" | "QUIZ" | "FLASHCARDS" | "INFOGRAPHI
 export type GeneratedAsset = {
   type: AssetTypeName;
   content: unknown;
+  fileUrl?: string;
 };
 
 export type GenerateArgs = {
@@ -21,10 +25,133 @@ export type GenerateResult = {
   assets: GeneratedAsset[];
 };
 
+export type EditAssetArgs = {
+  orgSlug: string;
+  lecturerId: string;
+  lessonTitle: string;
+  assetType: AssetTypeName;
+  editPrompt: string;
+  baseContent: unknown;
+  notebookId?: string | null;
+};
+
 // dry_run = תוצרי דמה לבדיקת הצינור; real = notebooklm-py אמיתי (דורש התחברות גוגל)
 function workerMode(): "dry_run" | "real" {
   return process.env.WORKER_MODE === "real" ? "real" : "dry_run";
 }
+
+/* ---------- גשר לפייתון ---------- */
+
+type BridgeAsset = { type: AssetTypeName; content: unknown; fileName?: string };
+type BridgeResult = { notebookId: string; assets: BridgeAsset[]; error?: string };
+
+const BRIDGE_TIMEOUT_MS = 20 * 60 * 1000;
+
+function generatedFilesDir(): string {
+  const dir = path.join(process.cwd(), "public", "generated");
+  mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+function runBridge(payload: Record<string, unknown>): Promise<BridgeResult> {
+  return new Promise((resolve, reject) => {
+    const bridgePath = path.join(process.cwd(), "worker", "notebooklm_bridge.py");
+    const child = spawn("python", [bridgePath], {
+      cwd: process.cwd(),
+      env: { ...process.env, PYTHONIOENCODING: "utf-8" },
+    });
+
+    let stdout = "";
+    let stderr = "";
+    const timer = setTimeout(() => {
+      child.kill();
+      reject(new Error("notebooklm bridge עבר את מגבלת הזמן"));
+    }, BRIDGE_TIMEOUT_MS);
+
+    child.stdout.on("data", (d) => (stdout += d));
+    child.stderr.on("data", (d) => {
+      stderr += d;
+      // לוגים חיים מהגשר — שקיפות בתהליך שלוקח דקות
+      for (const line of String(d).split("\n")) {
+        if (line.trim()) console.log(`  [bridge] ${line.trim()}`);
+      }
+    });
+    child.on("error", (err) => {
+      clearTimeout(timer);
+      reject(err);
+    });
+    child.on("close", (code) => {
+      clearTimeout(timer);
+      try {
+        const parsed = JSON.parse(stdout.trim()) as BridgeResult;
+        if (parsed.error) {
+          reject(new Error(`NotebookLM: ${parsed.error}`));
+        } else {
+          resolve(parsed);
+        }
+      } catch {
+        reject(
+          new Error(
+            `notebooklm bridge נכשל (exit ${code}): ${stderr.slice(-400) || "ללא פלט"}`
+          )
+        );
+      }
+    });
+
+    child.stdin.write(JSON.stringify(payload));
+    child.stdin.end();
+  });
+}
+
+type NotebookQuizOption = { text?: string; isCorrect?: boolean; rationale?: string };
+type NotebookQuizQuestion = {
+  question?: string;
+  hint?: string;
+  answerOptions?: NotebookQuizOption[];
+};
+
+// ממפה את ה-JSON של NotebookLM למבנה הקנוני שהתצוגות מצפות לו;
+// הגולמי נשאר תחת content.notebooklm
+export function normalizeContent(type: AssetTypeName, content: unknown): unknown {
+  if (!content || typeof content !== "object") return content;
+  const c = content as Record<string, unknown>;
+  const raw = c.notebooklm;
+  if (!raw || typeof raw !== "object") return content;
+  const nb = raw as Record<string, unknown>;
+
+  if (type === "QUIZ" && Array.isArray(nb.questions)) {
+    const questions = (nb.questions as NotebookQuizQuestion[]).map((q) => {
+      const opts = Array.isArray(q.answerOptions) ? q.answerOptions : [];
+      const correctIndex = opts.findIndex((o) => o?.isCorrect);
+      return {
+        question: q.question ?? "",
+        options: opts.map((o) => o?.text ?? ""),
+        correctIndex: correctIndex >= 0 ? correctIndex : 0,
+        explanation:
+          (correctIndex >= 0 ? opts[correctIndex]?.rationale : undefined) ??
+          q.hint ??
+          "",
+      };
+    });
+    return { ...c, questions };
+  }
+
+  if (type === "FLASHCARDS" && Array.isArray(nb.cards)) {
+    return { ...c, cards: nb.cards };
+  }
+
+  return content;
+}
+
+function toGeneratedAsset(asset: BridgeAsset): GeneratedAsset {
+  return {
+    type: asset.type,
+    content: normalizeContent(asset.type, asset.content),
+    fileUrl: asset.fileName ? `/generated/${asset.fileName}` : undefined,
+  };
+}
+
+/* ---------- dry run ---------- */
 
 function dryRunAssets(lessonTitle: string, prompts: AssetPrompts): GeneratedAsset[] {
   return [
@@ -90,20 +217,35 @@ function dryRunAssets(lessonTitle: string, prompts: AssetPrompts): GeneratedAsse
   ];
 }
 
-export type EditAssetArgs = {
-  orgSlug: string;
-  lecturerId: string;
-  lessonTitle: string;
-  assetType: AssetTypeName;
-  editPrompt: string;
-  baseContent: unknown;
-  notebookId?: string | null;
-};
+/* ---------- API ציבורי של המודול ---------- */
 
-// עריכת תוצר קיים דרך הצ'אט של המחברת; dry_run מסמן את התוכן הקיים כמעודכן
+export async function generateLessonAssets(args: GenerateArgs): Promise<GenerateResult> {
+  if (workerMode() === "dry_run") {
+    return {
+      notebookId: args.existingNotebookId ?? `dry-run-${args.orgSlug}-${args.lecturerId}`,
+      assets: dryRunAssets(args.lessonTitle, args.prompts),
+    };
+  }
+
+  const result = await runBridge({
+    command: "generate",
+    notebookTitle: `${args.orgSlug}-${args.lecturerId}`,
+    sourceTitle: args.lessonTitle,
+    sourceText: args.sourceText,
+    prompts: args.prompts,
+    filesDir: generatedFilesDir(),
+  });
+
+  return {
+    notebookId: result.notebookId,
+    assets: result.assets.map(toGeneratedAsset),
+  };
+}
+
+// עריכת תוצר קיים: יצירה מחדש עם הוראות ממוקדות באותה מחברת
 export async function generateEditedAsset(
   args: EditAssetArgs
-): Promise<{ content: unknown }> {
+): Promise<{ content: unknown; fileUrl?: string }> {
   if (workerMode() === "dry_run") {
     const base =
       args.baseContent && typeof args.baseContent === "object"
@@ -120,22 +262,20 @@ export async function generateEditedAsset(
     };
   }
 
-  throw new Error(
-    "מצב real של NotebookLM עוד לא מחובר — נדרשת התחברות גוגל ל-notebooklm-py. בינתיים השתמשו ב-WORKER_MODE=dry_run"
-  );
-}
-
-export async function generateLessonAssets(args: GenerateArgs): Promise<GenerateResult> {
-  if (workerMode() === "dry_run") {
-    return {
-      notebookId: args.existingNotebookId ?? `dry-run-${args.orgSlug}-${args.lecturerId}`,
-      assets: dryRunAssets(args.lessonTitle, args.prompts),
-    };
+  if (!args.notebookId) {
+    throw new Error("לשיעור אין מחברת NotebookLM — אי אפשר לערוך לפני ייצור ראשוני");
   }
 
-  // מצב real: גשר ל-notebooklm-py (פייתון) דרך child_process.
-  // ימומש כשדניאל יתחבר לחשבון הגוגל — ההתחברות אינטראקטיבית וחד-פעמית.
-  throw new Error(
-    "מצב real של NotebookLM עוד לא מחובר — נדרשת התחברות גוגל ל-notebooklm-py. בינתיים השתמשו ב-WORKER_MODE=dry_run"
-  );
+  const result = await runBridge({
+    command: "edit",
+    notebookId: args.notebookId,
+    assetType: args.assetType,
+    prompt: args.editPrompt,
+    filesDir: generatedFilesDir(),
+  });
+
+  const asset = result.assets[0];
+  if (!asset) throw new Error("NotebookLM לא החזיר תוצר");
+  const generated = toGeneratedAsset(asset);
+  return { content: generated.content, fileUrl: generated.fileUrl };
 }
