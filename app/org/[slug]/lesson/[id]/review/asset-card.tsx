@@ -24,10 +24,12 @@ export function AssetCard({
   lessonId,
   asset,
   disabled,
+  notebookId,
 }: {
   lessonId: string;
   asset: AssetForCard;
   disabled: boolean;
+  notebookId?: string | null;
 }) {
   const router = useRouter();
   const meta = TYPE_META[asset.type] ?? { label: asset.type, icon: "📄" };
@@ -115,8 +117,9 @@ export function AssetCard({
 
       {error && <p className="text-red-600 text-sm">{error}</p>}
 
-      <div className="flex gap-2">
-        {!asset.approved && (
+      {/* תוצר מאושר — אין יותר פעולות על הכרטיס */}
+      {!asset.approved && (
+        <div className="flex gap-2">
           <button
             onClick={approve}
             disabled={busy || disabled}
@@ -124,17 +127,17 @@ export function AssetCard({
           >
             ✅ אשר
           </button>
-        )}
-        <button
-          onClick={() => setEditOpen(!editOpen)}
-          disabled={busy || disabled}
-          className="flex-1 rounded-xl border border-neutral-300 py-2 text-sm font-medium disabled:opacity-40 bg-white"
-        >
-          ✏️ שלח לעריכה
-        </button>
-      </div>
+          <button
+            onClick={() => setEditOpen(!editOpen)}
+            disabled={busy || disabled}
+            className="flex-1 rounded-xl border border-neutral-300 py-2 text-sm font-medium disabled:opacity-40 bg-white"
+          >
+            ✏️ שלח לעריכה
+          </button>
+        </div>
+      )}
 
-      {editOpen && (
+      {!asset.approved && editOpen && (
         <div className="space-y-2">
           <textarea
             rows={3}
@@ -155,7 +158,12 @@ export function AssetCard({
       )}
 
       {modalOpen && (
-        <AssetModal asset={asset} meta={meta} onClose={() => setModalOpen(false)} />
+        <AssetModal
+          asset={asset}
+          meta={meta}
+          notebookId={notebookId}
+          onClose={() => setModalOpen(false)}
+        />
       )}
     </div>
   );
@@ -276,10 +284,12 @@ function IconTile({ icon, label }: { icon: string; label: string }) {
 function AssetModal({
   asset,
   meta,
+  notebookId,
   onClose,
 }: {
   asset: AssetForCard;
   meta: { label: string; icon: string };
+  notebookId?: string | null;
   onClose: () => void;
 }) {
   useEffect(() => {
@@ -292,14 +302,18 @@ function AssetModal({
 
   const c = (asset.content ?? {}) as Record<string, unknown>;
   const prompt = c.promptUsed ?? c.editPromptUsed;
+  const notebookLink =
+    notebookId && !notebookId.startsWith("dry-run")
+      ? `https://notebooklm.google.com/notebook/${notebookId}`
+      : null;
 
   return (
     <div
-      className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4"
+      className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-2 sm:p-4"
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-2xl w-full max-w-3xl max-h-[88vh] flex flex-col shadow-2xl"
+        className="bg-white rounded-2xl w-full h-full flex flex-col shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <header className="flex items-center justify-between gap-3 px-5 py-3 border-b border-neutral-100 shrink-0">
@@ -311,15 +325,27 @@ function AssetModal({
               </span>
             )}
           </h3>
-          <button
-            onClick={onClose}
-            className="text-neutral-400 hover:text-neutral-700 text-2xl leading-none px-1"
-            aria-label="סגירה"
-          >
-            ✕
-          </button>
+          <div className="flex items-center gap-4">
+            {notebookLink && (
+              <a
+                href={notebookLink}
+                target="_blank"
+                rel="noreferrer"
+                className="text-sm text-accent underline"
+              >
+                🔗 פתיחה ב-NotebookLM
+              </a>
+            )}
+            <button
+              onClick={onClose}
+              className="text-neutral-400 hover:text-neutral-700 text-2xl leading-none px-1"
+              aria-label="סגירה"
+            >
+              ✕
+            </button>
+          </div>
         </header>
-        <div className="overflow-y-auto p-5">
+        <div className="overflow-y-auto p-5 flex-1">
           <FullAssetView type={asset.type} content={asset.content} fileUrl={asset.fileUrl} />
           {typeof prompt === "string" && (
             <details className="mt-4 text-xs text-neutral-400 border-t border-neutral-100 pt-3">

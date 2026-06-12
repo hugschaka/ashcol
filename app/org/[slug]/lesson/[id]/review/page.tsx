@@ -95,6 +95,7 @@ export default async function ReviewPage({
                   } satisfies AssetForCard
                 }
                 disabled={busy}
+                notebookId={lesson.notebookId}
               />
             ))}
           </div>

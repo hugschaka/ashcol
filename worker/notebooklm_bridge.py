@@ -64,12 +64,19 @@ async def generate_one(client: NotebookLMClient, nb_id: str, kind: str, instruct
         return {"type": kind, "content": {"notebooklm": data, "promptUsed": instructions}}
 
     if kind == "PRESENTATION":
-        fname = f"slides-{uuid.uuid4().hex}.pdf"
-        saved = await art.download_slide_deck(nb_id, os.path.join(files_dir, fname), artifact_id, output_format="pdf")
+        token = uuid.uuid4().hex
+        saved = await art.download_slide_deck(nb_id, os.path.join(files_dir, f"slides-{token}.pdf"), artifact_id, output_format="pdf")
+        content = {"format": "pdf", "promptUsed": instructions}
+        # PPTX בנוסף — נפתח ב-PowerPoint וב-Google Slides
+        try:
+            pptx = await art.download_slide_deck(nb_id, os.path.join(files_dir, f"slides-{token}.pptx"), artifact_id, output_format="pptx")
+            content["pptxFile"] = os.path.basename(pptx)
+        except Exception as e:  # noqa: BLE001 — ה-PDF מספיק, PPTX הוא בונוס
+            log(f"PRESENTATION: הורדת pptx נכשלה ({e})")
         return {
             "type": kind,
             "fileName": os.path.basename(saved),
-            "content": {"format": "pdf", "promptUsed": instructions},
+            "content": content,
         }
 
     # INFOGRAPHIC — הספרייה קובעת את הסיומת; משתמשים בנתיב שחזר בפועל

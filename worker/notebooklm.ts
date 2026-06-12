@@ -154,9 +154,17 @@ export function normalizeContent(type: AssetTypeName, content: unknown): unknown
 }
 
 function toGeneratedAsset(asset: BridgeAsset): GeneratedAsset {
+  let content = normalizeContent(asset.type, asset.content);
+  // קובץ PPTX נוסף (מצגת) → URL ציבורי
+  if (content && typeof content === "object" && "pptxFile" in content) {
+    const { pptxFile, ...rest } = content as Record<string, unknown>;
+    if (typeof pptxFile === "string") {
+      content = { ...rest, pptxUrl: `/generated/${pptxFile}` };
+    }
+  }
   return {
     type: asset.type,
-    content: normalizeContent(asset.type, asset.content),
+    content,
     fileUrl: asset.fileName ? `/generated/${asset.fileName}` : undefined,
   };
 }

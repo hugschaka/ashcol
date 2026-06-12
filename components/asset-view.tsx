@@ -31,12 +31,16 @@ export function FullAssetView({
   }
 
   if (fileUrl && type === "PRESENTATION") {
+    const pptxUrl =
+      content && typeof content === "object"
+        ? (content as Record<string, unknown>).pptxUrl
+        : undefined;
     return (
       <div className="space-y-2">
         <object
           data={`${fileUrl}#toolbar=1&navpanes=0`}
           type="application/pdf"
-          className="w-full h-[70vh] rounded-xl border border-neutral-200"
+          className="w-full h-[75vh] rounded-xl border border-neutral-200"
         >
           <p className="text-sm text-neutral-500 p-4">
             הדפדפן לא מציג PDF מוטמע —{" "}
@@ -45,14 +49,16 @@ export function FullAssetView({
             </a>
           </p>
         </object>
-        <a
-          href={fileUrl}
-          target="_blank"
-          rel="noreferrer"
-          className="inline-block text-sm text-accent underline"
-        >
-          📎 פתיחה בחלון חדש / הורדה
-        </a>
+        <div className="flex gap-4 flex-wrap text-sm">
+          <a href={fileUrl} target="_blank" rel="noreferrer" className="text-accent underline">
+            📎 פתיחה בחלון חדש
+          </a>
+          {typeof pptxUrl === "string" && (
+            <a href={pptxUrl} download className="text-accent underline">
+              ⬇️ הורדת PowerPoint — נפתח גם ב-Google Slides
+            </a>
+          )}
+        </div>
       </div>
     );
   }
