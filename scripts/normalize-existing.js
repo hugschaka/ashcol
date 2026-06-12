@@ -9,13 +9,23 @@ function normalize(type, content) {
   if (type === "QUIZ" && Array.isArray(raw.questions)) {
     const questions = raw.questions.map((q) => {
       const opts = Array.isArray(q.answerOptions) ? q.answerOptions : [];
-      const correctIndex = opts.findIndex((o) => o && o.isCorrect);
+      // ערבוב — NotebookLM שם את הנכונה ראשונה
+      const indexed = opts.map((o) => ({
+        text: (o && o.text) || "",
+        wasCorrect: Boolean(o && o.isCorrect),
+        rationale: o && o.rationale,
+      }));
+      for (let i = indexed.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [indexed[i], indexed[j]] = [indexed[j], indexed[i]];
+      }
+      const correctIndex = indexed.findIndex((o) => o.wasCorrect);
       return {
         question: q.question ?? "",
-        options: opts.map((o) => (o && o.text) || ""),
+        options: indexed.map((o) => o.text),
         correctIndex: correctIndex >= 0 ? correctIndex : 0,
         explanation:
-          (correctIndex >= 0 && opts[correctIndex].rationale) || q.hint || "",
+          (correctIndex >= 0 && indexed[correctIndex].rationale) || q.hint || "",
       };
     });
     return { ...content, questions };
@@ -37,12 +47,7 @@ function normalize(type, content) {
   );
   let fixed = 0;
   for (const row of rows.rows) {
-    // מדלגים על מה שכבר תקין (יש questions/cards ברמה העליונה)
-    const has =
-      row.type === "QUIZ"
-        ? Array.isArray(row.content?.questions)
-        : Array.isArray(row.content?.cards);
-    if (has) continue;
+    // בנייה מחדש תמיד מהגולמי (content.notebooklm) — אידמפוטנטי וכולל ערבוב
     const next = normalize(row.type, row.content);
     if (!next) continue;
     await c.query(`update "LessonAsset" set content = $1 where id = $2`, [

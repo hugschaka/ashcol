@@ -122,13 +122,23 @@ export function normalizeContent(type: AssetTypeName, content: unknown): unknown
   if (type === "QUIZ" && Array.isArray(nb.questions)) {
     const questions = (nb.questions as NotebookQuizQuestion[]).map((q) => {
       const opts = Array.isArray(q.answerOptions) ? q.answerOptions : [];
-      const correctIndex = opts.findIndex((o) => o?.isCorrect);
+      // NotebookLM מחזיר את התשובה הנכונה תמיד ראשונה — מערבבים
+      const indexed = opts.map((o) => ({
+        text: o?.text ?? "",
+        wasCorrect: Boolean(o?.isCorrect),
+        rationale: o?.rationale,
+      }));
+      for (let i = indexed.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [indexed[i], indexed[j]] = [indexed[j], indexed[i]];
+      }
+      const correctIndex = indexed.findIndex((o) => o.wasCorrect);
       return {
         question: q.question ?? "",
-        options: opts.map((o) => o?.text ?? ""),
+        options: indexed.map((o) => o.text),
         correctIndex: correctIndex >= 0 ? correctIndex : 0,
         explanation:
-          (correctIndex >= 0 ? opts[correctIndex]?.rationale : undefined) ??
+          (correctIndex >= 0 ? indexed[correctIndex]?.rationale : undefined) ??
           q.hint ??
           "",
       };
