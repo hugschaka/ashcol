@@ -1,7 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { FullAssetView } from "@/components/asset-view";
 
 export type AssetForCard = {
   id: string;
@@ -30,6 +31,7 @@ export function AssetCard({
 }) {
   const router = useRouter();
   const meta = TYPE_META[asset.type] ?? { label: asset.type, icon: "📄" };
+  const [modalOpen, setModalOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
@@ -84,7 +86,11 @@ export function AssetCard({
   }
 
   return (
-    <div className="rounded-2xl border border-neutral-200 p-4 space-y-3 flex flex-col">
+    <div
+      className={`rounded-2xl border p-4 space-y-3 flex flex-col transition-colors ${
+        asset.approved ? "border-green-300 bg-green-50/40" : "border-neutral-200"
+      }`}
+    >
       <header className="flex items-center justify-between gap-2">
         <h2 className="font-bold">
           {meta.icon} {meta.label}
@@ -95,7 +101,7 @@ export function AssetCard({
           )}
         </h2>
         {asset.approved ? (
-          <span className="rounded-full bg-green-50 text-green-700 px-3 py-1 text-xs font-medium">
+          <span className="rounded-full bg-green-100 text-green-700 px-3 py-1 text-xs font-medium">
             ✓ מאושר
           </span>
         ) : (
@@ -105,23 +111,7 @@ export function AssetCard({
         )}
       </header>
 
-      <div className="flex-1 rounded-xl bg-neutral-50 p-3 text-sm max-h-64 overflow-y-auto">
-        {asset.fileUrl &&
-          (asset.type === "INFOGRAPHIC" ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={asset.fileUrl} alt={meta.label} className="rounded-lg w-full mb-2" />
-          ) : (
-            <a
-              href={asset.fileUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="block text-accent underline mb-2"
-            >
-              📎 פתיחת הקובץ המלא
-            </a>
-          ))}
-        <AssetPreview type={asset.type} content={asset.content} />
-      </div>
+      <Thumbnail asset={asset} meta={meta} onOpen={() => setModalOpen(true)} />
 
       {error && <p className="text-red-600 text-sm">{error}</p>}
 
@@ -138,7 +128,7 @@ export function AssetCard({
         <button
           onClick={() => setEditOpen(!editOpen)}
           disabled={busy || disabled}
-          className="flex-1 rounded-xl border border-neutral-300 py-2 text-sm font-medium disabled:opacity-40"
+          className="flex-1 rounded-xl border border-neutral-300 py-2 text-sm font-medium disabled:opacity-40 bg-white"
         >
           ✏️ שלח לעריכה
         </button>
@@ -151,7 +141,7 @@ export function AssetCard({
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             placeholder="מה לשנות? לדוגמה: תוסיף עוד שאלות על הנושא השני, תפשט את השפה..."
-            className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
+            className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent bg-white"
             autoFocus
           />
           <button
@@ -163,154 +153,182 @@ export function AssetCard({
           </button>
         </div>
       )}
+
+      {modalOpen && (
+        <AssetModal asset={asset} meta={meta} onClose={() => setModalOpen(false)} />
+      )}
     </div>
   );
 }
 
-/* ---------- תצוגות מקדימות לפי סוג תוצר ---------- */
+/* ---------- תמונה ממוזערת — לחיצה פותחת תצוגה מלאה ---------- */
 
-function AssetPreview({ type, content }: { type: string; content: unknown }) {
-  const c = content as Record<string, unknown> | null;
-  if (!c || typeof c !== "object") {
-    return <p className="text-neutral-400">אין תצוגה מקדימה</p>;
-  }
-
-  switch (type) {
-    case "PRESENTATION":
-      return <PresentationPreview c={c} />;
-    case "QUIZ":
-      return <QuizPreview c={c} />;
-    case "FLASHCARDS":
-      return <FlashcardsPreview c={c} />;
-    case "INFOGRAPHIC":
-      return <InfographicPreview c={c} />;
-    default:
-      return <RawPreview c={c} />;
-  }
-}
-
-function PromptDetails({ c }: { c: Record<string, unknown> }) {
-  const prompt = c.promptUsed ?? c.editPromptUsed;
-  if (typeof prompt !== "string") return null;
+function Thumbnail({
+  asset,
+  meta,
+  onOpen,
+}: {
+  asset: AssetForCard;
+  meta: { label: string; icon: string };
+  onOpen: () => void;
+}) {
   return (
-    <details className="mt-2 text-xs text-neutral-400">
-      <summary className="cursor-pointer">הפרומפט שנשלח ל-NotebookLM</summary>
-      <p className="mt-1 whitespace-pre-wrap">{prompt}</p>
-    </details>
+    <button
+      onClick={onOpen}
+      className="relative block w-full h-44 rounded-xl overflow-hidden border border-neutral-200 bg-white text-right cursor-zoom-in group"
+      title="תצוגה מלאה"
+    >
+      <ThumbnailInner asset={asset} meta={meta} />
+      <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent text-white text-xs px-3 pb-2 pt-6 text-center opacity-90 group-hover:opacity-100">
+        🔍 לחיצה לתצוגה מלאה
+      </span>
+    </button>
   );
 }
 
-function PresentationPreview({ c }: { c: Record<string, unknown> }) {
-  const slides = Array.isArray(c.slides) ? c.slides : [];
-  if (slides.length === 0) return <RawPreview c={c} />;
+function ThumbnailInner({
+  asset,
+  meta,
+}: {
+  asset: AssetForCard;
+  meta: { label: string; icon: string };
+}) {
+  const c = (asset.content ?? {}) as Record<string, unknown>;
+
+  if (asset.fileUrl && asset.type === "INFOGRAPHIC") {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={asset.fileUrl}
+        alt={meta.label}
+        className="w-full h-full object-cover object-top"
+      />
+    );
+  }
+
+  if (asset.fileUrl && asset.type === "PRESENTATION") {
+    return (
+      <object
+        data={`${asset.fileUrl}#toolbar=0&navpanes=0&scrollbar=0&view=FitH`}
+        type="application/pdf"
+        className="w-full h-full pointer-events-none"
+        aria-label={meta.label}
+      >
+        <IconTile icon={meta.icon} label={`${meta.label} (PDF)`} />
+      </object>
+    );
+  }
+
+  if (asset.type === "QUIZ" && Array.isArray(c.questions) && c.questions.length > 0) {
+    const first = c.questions[0] as { question?: string };
+    return (
+      <TextTile
+        chip={`${c.questions.length} שאלות`}
+        text={first.question ?? ""}
+        icon={meta.icon}
+      />
+    );
+  }
+
+  if (asset.type === "FLASHCARDS" && Array.isArray(c.cards) && c.cards.length > 0) {
+    const first = c.cards[0] as { front?: string };
+    return (
+      <TextTile
+        chip={`${c.cards.length} כרטיסיות`}
+        text={first.front ?? ""}
+        icon={meta.icon}
+      />
+    );
+  }
+
+  if (asset.type === "PRESENTATION" && Array.isArray(c.slides) && c.slides.length > 0) {
+    const first = c.slides[0] as { title?: string };
+    return (
+      <TextTile chip={`${c.slides.length} שקפים`} text={first.title ?? ""} icon={meta.icon} />
+    );
+  }
+
+  return <IconTile icon={meta.icon} label={meta.label} />;
+}
+
+function TextTile({ chip, text, icon }: { chip: string; text: string; icon: string }) {
   return (
-    <div className="space-y-2">
-      {slides.slice(0, 3).map((slide: { title?: string; bullets?: string[] }, i) => (
-        <div key={i} className="rounded-lg bg-white border border-neutral-200 p-2">
-          <p className="font-medium">{slide.title ?? `שקף ${i + 1}`}</p>
-          {Array.isArray(slide.bullets) && (
-            <ul className="list-disc pr-5 text-neutral-600 mt-1">
-              {slide.bullets.slice(0, 3).map((b, j) => (
-                <li key={j}>{b}</li>
-              ))}
-            </ul>
+    <div className="w-full h-full p-4 flex flex-col gap-2 bg-neutral-50">
+      <span className="self-start rounded-full bg-accent/10 text-accent px-3 py-1 text-xs font-medium">
+        {icon} {chip}
+      </span>
+      <p className="text-sm text-neutral-700 leading-snug overflow-hidden">{text}</p>
+    </div>
+  );
+}
+
+function IconTile({ icon, label }: { icon: string; label: string }) {
+  return (
+    <div className="w-full h-full flex flex-col items-center justify-center gap-2 bg-neutral-50">
+      <span className="text-4xl">{icon}</span>
+      <span className="text-sm text-neutral-500">{label}</span>
+    </div>
+  );
+}
+
+/* ---------- פופאפ תצוגה מלאה ---------- */
+
+function AssetModal({
+  asset,
+  meta,
+  onClose,
+}: {
+  asset: AssetForCard;
+  meta: { label: string; icon: string };
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [onClose]);
+
+  const c = (asset.content ?? {}) as Record<string, unknown>;
+  const prompt = c.promptUsed ?? c.editPromptUsed;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-2xl w-full max-w-3xl max-h-[88vh] flex flex-col shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <header className="flex items-center justify-between gap-3 px-5 py-3 border-b border-neutral-100 shrink-0">
+          <h3 className="font-bold">
+            {meta.icon} {meta.label}
+            {asset.version > 1 && (
+              <span className="text-xs text-neutral-400 font-normal mr-2">
+                גרסה {asset.version}
+              </span>
+            )}
+          </h3>
+          <button
+            onClick={onClose}
+            className="text-neutral-400 hover:text-neutral-700 text-2xl leading-none px-1"
+            aria-label="סגירה"
+          >
+            ✕
+          </button>
+        </header>
+        <div className="overflow-y-auto p-5">
+          <FullAssetView type={asset.type} content={asset.content} fileUrl={asset.fileUrl} />
+          {typeof prompt === "string" && (
+            <details className="mt-4 text-xs text-neutral-400 border-t border-neutral-100 pt-3">
+              <summary className="cursor-pointer">הפרומפט שנשלח ל-NotebookLM</summary>
+              <p className="mt-1 whitespace-pre-wrap">{prompt}</p>
+            </details>
           )}
         </div>
-      ))}
-      {slides.length > 3 && (
-        <p className="text-xs text-neutral-400">ועוד {slides.length - 3} שקפים…</p>
-      )}
-      <PromptDetails c={c} />
+      </div>
     </div>
-  );
-}
-
-function QuizPreview({ c }: { c: Record<string, unknown> }) {
-  const questions = Array.isArray(c.questions) ? c.questions : [];
-  if (questions.length === 0) return <RawPreview c={c} />;
-  return (
-    <div className="space-y-2">
-      {questions
-        .slice(0, 2)
-        .map(
-          (
-            q: { question?: string; options?: string[]; correctIndex?: number },
-            i
-          ) => (
-            <div key={i} className="rounded-lg bg-white border border-neutral-200 p-2">
-              <p className="font-medium">
-                {i + 1}. {q.question}
-              </p>
-              {Array.isArray(q.options) && (
-                <ul className="mt-1 space-y-0.5 text-neutral-600">
-                  {q.options.map((opt, j) => (
-                    <li key={j} className={j === q.correctIndex ? "font-bold text-green-700" : ""}>
-                      {j === q.correctIndex ? "✓ " : "· "}
-                      {opt}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          )
-        )}
-      {questions.length > 2 && (
-        <p className="text-xs text-neutral-400">ועוד {questions.length - 2} שאלות…</p>
-      )}
-      <PromptDetails c={c} />
-    </div>
-  );
-}
-
-function FlashcardsPreview({ c }: { c: Record<string, unknown> }) {
-  const cards = Array.isArray(c.cards) ? c.cards : [];
-  if (cards.length === 0) return <RawPreview c={c} />;
-  return (
-    <div className="space-y-1.5">
-      {cards.slice(0, 4).map((card: { front?: string; back?: string }, i) => (
-        <div key={i} className="rounded-lg bg-white border border-neutral-200 p-2 flex gap-2">
-          <span className="font-medium shrink-0">{card.front}</span>
-          <span className="text-neutral-400 shrink-0">←</span>
-          <span className="text-neutral-600">{card.back}</span>
-        </div>
-      ))}
-      {cards.length > 4 && (
-        <p className="text-xs text-neutral-400">ועוד {cards.length - 4} כרטיסיות…</p>
-      )}
-      <PromptDetails c={c} />
-    </div>
-  );
-}
-
-function InfographicPreview({ c }: { c: Record<string, unknown> }) {
-  const sections = Array.isArray(c.sections) ? c.sections : [];
-  if (sections.length === 0) return <RawPreview c={c} />;
-  return (
-    <div className="space-y-1.5">
-      {sections.map(
-        (s: { heading?: string; text?: string; items?: string[] }, i) => (
-          <div key={i} className="rounded-lg bg-white border border-neutral-200 p-2">
-            <p className="font-medium">{s.heading}</p>
-            {s.text && <p className="text-neutral-600">{s.text}</p>}
-            {Array.isArray(s.items) && (
-              <ul className="list-disc pr-5 text-neutral-600">
-                {s.items.map((item, j) => (
-                  <li key={j}>{item}</li>
-                ))}
-              </ul>
-            )}
-          </div>
-        )
-      )}
-      <PromptDetails c={c} />
-    </div>
-  );
-}
-
-function RawPreview({ c }: { c: Record<string, unknown> }) {
-  return (
-    <pre dir="ltr" className="text-xs whitespace-pre-wrap break-all text-neutral-600">
-      {JSON.stringify(c, null, 2).slice(0, 1500)}
-    </pre>
   );
 }
