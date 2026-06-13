@@ -2,6 +2,7 @@ import "./env";
 import { prisma } from "./db";
 import { handleEditAsset } from "./handlers/edit-asset";
 import { handleGenerateLesson } from "./handlers/generate-lesson";
+import { startSessionKeepalive } from "./session-keepalive";
 
 const POLL_INTERVAL_MS = 10_000;
 // ייצור אמיתי ב-NotebookLM לוקח דקות ארוכות (4 תוצרים במקביל)
@@ -157,6 +158,7 @@ async function processJob(job: NonNullable<Awaited<ReturnType<typeof claimNextJo
 
 async function mainLoop() {
   log(`worker עלה | mode=${process.env.WORKER_MODE ?? "dry_run"} | claude=${process.env.ANTHROPIC_API_KEY ? "yes" : "no (fallback prompts)"}`);
+  startSessionKeepalive();
   for (;;) {
     try {
       const job = await claimNextJob();

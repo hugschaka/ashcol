@@ -1,0 +1,76 @@
+# פריסת "אשכול" על VPS אחד: DB + אתר + worker + reverse proxy ל-HTTPS.
+# כל הסודות מגיעים מקובץ .env שיושב לצד הקובץ הזה (ראו .env.production.example).
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: eshcol
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: eshcol
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U eshcol"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://eshcol:${DB_PASSWORD}@db:5432/eshcol?sslmode=disable
+      AUTH_SECRET: ${AUTH_SECRET}
+      NEXTAUTH_SECRET: ${AUTH_SECRET}
+      AUTH_TRUST_HOST: "true"
+      NEXTAUTH_URL: ${PUBLIC_URL}
+    volumes:
+      - generated:/app/public/generated
+    # מריץ מיגרציות לפני העלאת האתר (אידמפוטנטי — בטוח בכל הפעלה)
+    command: sh -c "npx prisma migrate deploy && npm run start"
+
+  worker:
+    build:
+      context: .
+      dockerfile: worker/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://eshcol:${DB_PASSWORD}@db:5432/eshcol?sslmode=disable
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      WORKER_MODE: real
+      NOTEBOOKLM_HOME: /data/notebooklm
+    volumes:
+      - notebooklm-session:/data/notebooklm
+      - generated:/app/public/generated
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - web
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  pg-data:
+  notebooklm-session:
+  generated:
+  caddy-data:
+  caddy-config:

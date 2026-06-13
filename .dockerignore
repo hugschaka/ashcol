@@ -1,0 +1,8 @@
+node_modules
+.next
+.git
+generated
+public/generated
+.env*
+!.env.example
+npm-debug.log*
