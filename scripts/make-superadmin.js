@@ -1,45 +1,42 @@
 // הפיכת/יצירת משתמש למנהל פלטפורמה:
 //   node scripts/make-superadmin.js <email> <password> <orgSlug>
-const { PrismaClient } = require("../generated/prisma/client");
-const { PrismaPg } = require("@prisma/adapter-pg");
+// משתמש ב-pg ישירות (לא Prisma client) כדי לרוץ ב-node רגיל בתוך ה-container.
+const { Client } = require("pg");
 const bcrypt = require("bcryptjs");
 
-const prisma = new PrismaClient({
-  adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
-});
-
 (async () => {
-  const [email, password, orgSlug] = process.argv.slice(2);
-  if (!email || !password || !orgSlug) {
+  const [emailArg, password, orgSlug] = process.argv.slice(2);
+  if (!emailArg || !password || !orgSlug) {
     console.error("usage: node scripts/make-superadmin.js <email> <password> <orgSlug>");
     process.exit(1);
   }
-  const org = await prisma.organization.findUnique({ where: { slug: orgSlug } });
-  if (!org) {
+  const email = emailArg.toLowerCase();
+  const c = new Client({ connectionString: process.env.DATABASE_URL });
+  await c.connect();
+
+  const org = await c.query('SELECT id FROM "Organization" WHERE slug=$1', [orgSlug]);
+  if (!org.rows[0]) {
     console.error(`לא נמצא ארגון עם slug ${orgSlug}`);
     process.exit(1);
   }
+  const orgId = org.rows[0].id;
   const passwordHash = await bcrypt.hash(password, 12);
-  const user = await prisma.user.upsert({
-    where: { email: email.toLowerCase() },
-    update: {
-      isSuperAdmin: true,
-      role: "ADMIN",
-      passwordHash,
-      mustChangePassword: false,
-      deletedAt: null,
-    },
-    create: {
-      email: email.toLowerCase(),
-      passwordHash,
-      displayName: "מנהל פלטפורמה",
-      role: "ADMIN",
-      orgId: org.id,
-      isSuperAdmin: true,
-      acceptedTerms: true,
-      acceptedCookies: true,
-    },
-  });
-  console.log(`✓ ${user.email} הוא מנהל פלטפורמה (דרך ארגון ${orgSlug})`);
-  await prisma.$disconnect();
+
+  const existing = await c.query('SELECT id FROM "User" WHERE email=$1', [email]);
+  if (existing.rows[0]) {
+    await c.query(
+      `UPDATE "User" SET "isSuperAdmin"=true, role='ADMIN', "passwordHash"=$1,
+       "mustChangePassword"=false, "deletedAt"=NULL WHERE email=$2`,
+      [passwordHash, email]
+    );
+  } else {
+    await c.query(
+      `INSERT INTO "User" (id, email, "passwordHash", "displayName", role, "orgId",
+       "isSuperAdmin", "acceptedTerms", "acceptedCookies")
+       VALUES (gen_random_uuid()::text, $1, $2, $3, 'ADMIN', $4, true, true, true)`,
+      [email, passwordHash, "מנהל פלטפורמה", orgId]
+    );
+  }
+  console.log(`✓ ${email} הוא מנהל פלטפורמה (דרך ארגון ${orgSlug})`);
+  await c.end();
 })();
