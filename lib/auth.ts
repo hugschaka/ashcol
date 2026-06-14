@@ -8,7 +8,8 @@ import { prisma } from "@/lib/db";
 const loginSchema = z.object({
   email: z.email(),
   password: z.string().min(1),
-  orgSlug: z.string().min(1),
+  // אופציונלי: בכניסה גלובלית מזהים את הארגון מהמייל
+  orgSlug: z.string().optional(),
 });
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
@@ -26,8 +27,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           include: { org: { select: { slug: true } } },
         });
         if (!user || user.deletedAt) return null;
-        // התחברות רק דרך הארגון שהמשתמש שייך אליו
-        if (user.org.slug !== orgSlug) return null;
+        // אם צוין ארגון בכתובת — חייב להתאים; אחרת מזהים מהמייל
+        if (orgSlug && user.org.slug !== orgSlug) return null;
 
         const passwordOk = await bcrypt.compare(password, user.passwordHash);
         if (!passwordOk) return null;

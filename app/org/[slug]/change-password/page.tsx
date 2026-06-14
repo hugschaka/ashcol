@@ -1,5 +1,7 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
+import { auth } from "@/lib/auth";
+import { roleHome } from "@/lib/role-home";
 import { ChangePasswordForm } from "./change-password-form";
 
 export default async function ChangePasswordPage({
@@ -14,6 +16,9 @@ export default async function ChangePasswordPage({
   });
   if (!org) notFound();
 
+  const session = await auth();
+  const home = session?.user ? roleHome(session.user) : `/org/${org.slug}/dashboard`;
+
   return (
     <main className="flex-1 flex flex-col items-center justify-center p-6">
       <div className="w-full max-w-md space-y-6">
@@ -23,7 +28,7 @@ export default async function ChangePasswordPage({
             ברוכים הבאים ל{org.name}! לפני שמתחילים, בחרו סיסמה אישית חדשה.
           </p>
         </div>
-        <ChangePasswordForm orgSlug={org.slug} />
+        <ChangePasswordForm orgSlug={org.slug} home={home} />
       </div>
     </main>
   );

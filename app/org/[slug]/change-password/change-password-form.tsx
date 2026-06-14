@@ -4,7 +4,13 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 
-export function ChangePasswordForm({ orgSlug }: { orgSlug: string }) {
+export function ChangePasswordForm({
+  orgSlug,
+  home,
+}: {
+  orgSlug: string;
+  home: string;
+}) {
   const router = useRouter();
   const { update } = useSession();
   const [newPassword, setNewPassword] = useState("");
@@ -40,7 +46,7 @@ export function ChangePasswordForm({ orgSlug }: { orgSlug: string }) {
       }
       // מרעננים את ה-session כדי שהדגל mustChangePassword יתעדכן בלי re-login
       await update({ mustChangePassword: false });
-      router.push(`/org/${orgSlug}/dashboard`);
+      router.push(home);
       router.refresh();
     } catch {
       setError("משהו השתבש, נסו שוב");

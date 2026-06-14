@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 import { roleHome } from "@/lib/role-home";
 
-export function LoginForm({ orgSlug }: { orgSlug: string }) {
+// כניסה גלובלית — מייל+סיסמה, המערכת מזהה את הארגון מהמייל
+export function GlobalLoginForm() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -18,20 +19,20 @@ export function LoginForm({ orgSlug }: { orgSlug: string }) {
     setSending(true);
     setError(null);
     try {
-      const signed = await signIn("credentials", {
-        redirect: false,
-        email,
-        password,
-        orgSlug,
-      });
+      const signed = await signIn("credentials", { redirect: false, email, password });
       if (signed?.error) {
-        setError("המייל או הסיסמא שגויים, או שאינכם רשומים בארגון הזה");
+        setError("המייל או הסיסמה שגויים");
         return;
       }
       const session = await fetch("/api/auth/session").then((r) => r.json());
       const u = session?.user;
+      if (!u) {
+        setError("משהו השתבש, נסו שוב");
+        return;
+      }
+      // אם נדרשת החלפת סיסמה, ה-middleware יפנה לשם; אחרת ליעד לפי תפקיד
       router.push(
-        u?.mustChangePassword ? `/org/${orgSlug}/change-password` : u ? roleHome(u) : `/org/${orgSlug}`
+        u.mustChangePassword ? `/org/${u.orgSlug}/change-password` : roleHome(u)
       );
       router.refresh();
     } catch {
@@ -42,7 +43,7 @@ export function LoginForm({ orgSlug }: { orgSlug: string }) {
   }
 
   const inputCls =
-    "w-full rounded-xl border border-neutral-300 px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-accent";
+    "w-full rounded-xl border border-neutral-300 px-3 py-2.5 text-left focus:outline-none focus:ring-2 focus:ring-accent";
 
   return (
     <form onSubmit={submit} className="space-y-4">
@@ -52,19 +53,19 @@ export function LoginForm({ orgSlug }: { orgSlug: string }) {
           type="email"
           required
           dir="ltr"
-          className={`${inputCls} text-left`}
+          className={inputCls}
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           autoFocus
         />
       </div>
       <div>
-        <label className="block text-sm font-medium text-neutral-700 mb-1">סיסמא</label>
+        <label className="block text-sm font-medium text-neutral-700 mb-1">סיסמה</label>
         <input
           type="password"
           required
           dir="ltr"
-          className={`${inputCls} text-left`}
+          className={inputCls}
           value={password}
           onChange={(e) => setPassword(e.target.value)}
         />

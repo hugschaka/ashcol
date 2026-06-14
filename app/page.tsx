@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 
@@ -69,6 +70,13 @@ export default function Home() {
         </button>
         {error && <p className="text-red-600 text-sm">{error}</p>}
       </form>
+
+      <p className="text-sm text-neutral-500">
+        כבר יש לכם חשבון?{" "}
+        <Link href="/login" className="text-accent font-medium">
+          התחברות
+        </Link>
+      </p>
 
       {leadOpen && (
         <LeadModal
