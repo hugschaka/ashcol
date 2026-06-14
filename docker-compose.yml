@@ -65,6 +65,7 @@ services:
       DOMAIN: ${DOMAIN}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - generated:/srv/generated:ro
       - caddy-data:/data
       - caddy-config:/config
 

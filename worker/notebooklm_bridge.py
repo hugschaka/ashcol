@@ -16,6 +16,15 @@ def log(msg: str) -> None:
     print(msg, file=sys.stderr, flush=True)
 
 
+def _make_readable(files_dir: str) -> None:
+    # קבצים שנוצרים כ-600; ה-reverse proxy צריך להגיש אותם, אז 644
+    for name in os.listdir(files_dir):
+        try:
+            os.chmod(os.path.join(files_dir, name), 0o644)
+        except OSError:
+            pass
+
+
 async def find_or_create_notebook(client: NotebookLMClient, title: str):
     notebooks = await client.notebooks.list()
     for nb in notebooks:
@@ -111,6 +120,7 @@ async def cmd_generate(data: dict) -> dict:
         results = await asyncio.gather(
             *(generate_one(client, nb.id, kind, instr, files_dir) for kind, instr in kinds)
         )
+        _make_readable(files_dir)
         return {"notebookId": nb.id, "assets": list(results)}
 
 
@@ -122,6 +132,7 @@ async def cmd_edit(data: dict) -> dict:
         asset = await generate_one(
             client, data["notebookId"], data["assetType"], data["prompt"], files_dir
         )
+        _make_readable(files_dir)
         return {"notebookId": data["notebookId"], "assets": [asset]}
 
 

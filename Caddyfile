@@ -1,4 +1,10 @@
-# Caddy מנפיק ומחדש תעודת HTTPS אוטומטית עבור הדומיין, ומעביר לאתר.
+# Caddy מנפיק ומחדש תעודת HTTPS אוטומטית עבור הדומיין.
+# קבצים שה-worker מייצר (מצגות PDF/PPTX, אינפוגרפיות) מוגשים ישירות
+# מה-volume — מהר ובלי לערב את Next (שלא מגיש קבצי public שנוספו אחרי build).
 {$DOMAIN} {
+	handle_path /generated/* {
+		root * /srv/generated
+		file_server
+	}
 	reverse_proxy web:3000
 }
