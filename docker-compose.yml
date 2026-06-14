@@ -31,6 +31,8 @@ services:
       NEXTAUTH_SECRET: ${AUTH_SECRET}
       AUTH_TRUST_HOST: "true"
       NEXTAUTH_URL: ${PUBLIC_URL}
+      RESEND_API_KEY: ${RESEND_API_KEY}
+      ADMIN_EMAIL: ${ADMIN_EMAIL}
     volumes:
       - generated:/app/public/generated
     # מריץ מיגרציות לפני העלאת האתר (אידמפוטנטי — בטוח בכל הפעלה)
