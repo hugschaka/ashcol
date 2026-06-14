@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { rateLimit } from "@/lib/rate-limit";
+import { notifyNewLead } from "@/lib/email";
 
 const leadSchema = z.object({
   orgName: z.string().trim().min(2, "שם הארגון קצר מדי").max(100, "שם הארגון ארוך מדי"),
@@ -35,5 +36,7 @@ export async function POST(req: NextRequest) {
   }
 
   await prisma.lead.create({ data: parsed.data });
+  // התראת מייל למנהל הפלטפורמה — לא חוסמת את התשובה אם נכשלת
+  await notifyNewLead(parsed.data);
   return NextResponse.json({ ok: true }, { status: 201 });
 }
