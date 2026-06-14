@@ -39,6 +39,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           role: user.role,
           orgId: user.orgId,
           orgSlug: user.org.slug,
+          mustChangePassword: user.mustChangePassword,
+          isSuperAdmin: user.isSuperAdmin,
         };
       },
     }),

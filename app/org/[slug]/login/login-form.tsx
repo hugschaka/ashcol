@@ -1,7 +1,6 @@
 "use client";
 
 import { signIn } from "next-auth/react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 
@@ -81,13 +80,6 @@ export function LoginForm({ orgSlug }: { orgSlug: string }) {
       >
         {sending ? "מתחברים..." : "התחברות"}
       </button>
-
-      <p className="text-center text-sm text-neutral-500">
-        עדיין לא רשומים?{" "}
-        <Link href={`/org/${orgSlug}/register`} className="text-accent font-medium">
-          הרשמה
-        </Link>
-      </p>
     </form>
   );
 }

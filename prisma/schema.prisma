@@ -41,11 +41,13 @@ model User {
   orgId           String
   org             Organization @relation(fields: [orgId], references: [id])
   emailVerified   Boolean      @default(false)
-  acceptedTerms   Boolean
-  acceptedCookies Boolean
+  acceptedTerms   Boolean      @default(false)
+  acceptedCookies Boolean      @default(false)
   acceptedUpdates Boolean      @default(false)
   displayName     String
   deletedAt       DateTime? // soft delete — משתמש מחוק לא יכול להתחבר
+  mustChangePassword Boolean   @default(false) // נוצר עם סיסמה ראשונית — יחליף בכניסה
+  isSuperAdmin    Boolean      @default(false) // מנהל פלטפורמה — גישה לכל הארגונים
   createdAt       DateTime     @default(now())
   lessons         Lesson[]
 

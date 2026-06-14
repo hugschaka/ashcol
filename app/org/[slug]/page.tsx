@@ -51,19 +51,16 @@ export default async function OrgPage({
           )}
         </div>
       ) : (
-        <div className="flex gap-3">
-          <Link
-            href={`/org/${org.slug}/register`}
-            className="rounded-xl bg-accent text-white px-6 py-3 font-medium"
-          >
-            הרשמה
-          </Link>
+        <div className="flex flex-col items-center gap-3">
           <Link
             href={`/org/${org.slug}/login`}
-            className="rounded-xl border border-neutral-300 px-6 py-3 font-medium"
+            className="rounded-xl bg-accent text-white px-8 py-3 font-medium"
           >
             התחברות
           </Link>
+          <p className="text-sm text-neutral-400 max-w-xs">
+            אין לכם פרטי כניסה? פנו למנהל הארגון שלכם — הוא יקים לכם חשבון.
+          </p>
         </div>
       )}
     </main>

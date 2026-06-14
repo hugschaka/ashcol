@@ -7,6 +7,8 @@ declare module "next-auth" {
     role: AppRole;
     orgId: string;
     orgSlug: string;
+    mustChangePassword: boolean;
+    isSuperAdmin: boolean;
   }
 
   interface Session {
@@ -15,6 +17,8 @@ declare module "next-auth" {
       role: AppRole;
       orgId: string;
       orgSlug: string;
+      mustChangePassword: boolean;
+      isSuperAdmin: boolean;
     } & DefaultSession["user"];
   }
 }
@@ -24,5 +28,7 @@ declare module "next-auth/jwt" {
     role?: AppRole;
     orgId?: string;
     orgSlug?: string;
+    mustChangePassword?: boolean;
+    isSuperAdmin?: boolean;
   }
 }
