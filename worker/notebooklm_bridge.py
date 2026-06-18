@@ -105,11 +105,16 @@ async def cmd_generate(data: dict) -> dict:
 
     async with NotebookLMClient.from_storage() as client:
         nb = await find_or_create_notebook(client, data["notebookTitle"])
-        source = await client.sources.add_text(
-            nb.id, data["sourceTitle"], data["sourceText"],
-            wait=True, wait_timeout=SOURCE_READY_TIMEOUT,
-        )
-        log(f"source מוכן: {source.id}")
+        # idempotent: בריצה חוזרת המחברת כבר קיימת עם מקור — לא מוסיפים שוב
+        existing_sources = await client.notebooks.get_source_ids(nb.id)
+        if existing_sources:
+            log(f"מחברת קיימת עם {len(existing_sources)} מקורות — דילוג על הוספה")
+        else:
+            source = await client.sources.add_text(
+                nb.id, data["sourceTitle"], data["sourceText"],
+                wait=True, wait_timeout=SOURCE_READY_TIMEOUT,
+            )
+            log(f"source מוכן: {source.id}")
 
         kinds = [
             ("PRESENTATION", prompts["presentation"]),

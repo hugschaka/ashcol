@@ -29,6 +29,7 @@ export async function handleGenerateLesson(payload: unknown): Promise<void> {
   const result = await generateLessonAssets({
     orgSlug: lesson.org.slug,
     lecturerId: lesson.lecturerId,
+    lessonId: lesson.id,
     lessonTitle: lesson.title,
     sourceText: lesson.rawContent,
     prompts,

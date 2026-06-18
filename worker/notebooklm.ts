@@ -14,6 +14,7 @@ export type GeneratedAsset = {
 export type GenerateArgs = {
   orgSlug: string;
   lecturerId: string;
+  lessonId: string;
   lessonTitle: string;
   sourceText: string;
   prompts: AssetPrompts;
@@ -247,7 +248,8 @@ export async function generateLessonAssets(args: GenerateArgs): Promise<Generate
 
   const result = await runBridge({
     command: "generate",
-    notebookTitle: `${args.orgSlug}-${args.lecturerId}`,
+    // מחברת נפרדת לכל שיעור — בידוד מלא: מצגת נקייה ותוצרים מבוססים רק על השיעור הזה
+    notebookTitle: `${args.orgSlug}-${args.lessonId}`,
     sourceTitle: args.lessonTitle,
     sourceText: args.sourceText,
     prompts: args.prompts,
