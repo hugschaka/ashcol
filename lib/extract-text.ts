@@ -3,15 +3,12 @@ import { PDFParse } from "pdf-parse";
 
 export const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
+// מקבל את שם הקובץ ואת התוכן כ-Buffer (ה-route מפענח base64 ל-Buffer).
 export async function extractText(
-  file: File
+  fileName: string,
+  buffer: Buffer
 ): Promise<{ text: string } | { error: string }> {
-  if (file.size > MAX_FILE_SIZE) {
-    return { error: "הקובץ גדול מדי — המגבלה היא 10MB" };
-  }
-
-  const name = file.name.toLowerCase();
-  const buffer = Buffer.from(await file.arrayBuffer());
+  const name = fileName.toLowerCase();
 
   if (name.endsWith(".txt") || name.endsWith(".md")) {
     return { text: buffer.toString("utf-8") };

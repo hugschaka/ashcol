@@ -6,6 +6,16 @@ import { FormEvent, useState } from "react";
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const MIN_CONTENT = 100;
 
+// ממיר קובץ ל-base64 (בלי קידומת ה-data URL)
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).split(",")[1] ?? "");
+    reader.onerror = () => reject(new Error("read error"));
+    reader.readAsDataURL(file);
+  });
+}
+
 export function NewLessonForm({ orgSlug }: { orgSlug: string }) {
   const router = useRouter();
   const [title, setTitle] = useState("");
@@ -28,14 +38,23 @@ export function NewLessonForm({ orgSlug }: { orgSlug: string }) {
     setSending(true);
     setError(null);
     try {
-      const formData = new FormData();
-      formData.set("title", title.trim());
-      formData.set("content", content);
-      if (file) formData.set("file", file);
+      // שולחים כ-JSON (קובץ כ-base64) ולא multipart — Next מיירט
+      // multipart-עם-קובץ כ-Server Action ומנתק את החיבור.
+      const payload: {
+        title: string;
+        content: string;
+        fileName?: string;
+        fileBase64?: string;
+      } = { title: title.trim(), content };
+      if (file) {
+        payload.fileName = file.name;
+        payload.fileBase64 = await fileToBase64(file);
+      }
 
       const res = await fetch(`/api/orgs/${orgSlug}/lessons`, {
         method: "POST",
-        body: formData,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (!res.ok) {

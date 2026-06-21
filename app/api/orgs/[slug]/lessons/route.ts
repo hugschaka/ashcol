@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
-import { extractText } from "@/lib/extract-text";
+import { extractText, MAX_FILE_SIZE } from "@/lib/extract-text";
 import { requireUser } from "@/lib/guard";
 
 const MAX_LESSONS_PER_DAY = 10;
@@ -39,17 +39,30 @@ export async function POST(
     );
   }
 
-  const form = await req.formData().catch(() => null);
-  if (!form) {
+  // קובץ מגיע כ-base64 בתוך JSON (לא multipart) — Next מיירט multipart-עם-קובץ
+  // כ-Server Action ומנתק את החיבור.
+  const body = (await req.json().catch(() => null)) as {
+    title?: string;
+    content?: string;
+    fileName?: string;
+    fileBase64?: string;
+  } | null;
+  if (!body) {
     return NextResponse.json({ error: "בקשה לא תקינה" }, { status: 400 });
   }
 
-  const title = String(form.get("title") ?? "");
-  let content = String(form.get("content") ?? "");
+  const title = String(body.title ?? "");
+  let content = String(body.content ?? "");
 
-  const file = form.get("file");
-  if (file instanceof File && file.size > 0) {
-    const extracted = await extractText(file);
+  if (body.fileBase64 && body.fileName) {
+    const buffer = Buffer.from(body.fileBase64, "base64");
+    if (buffer.length > MAX_FILE_SIZE) {
+      return NextResponse.json(
+        { error: "הקובץ גדול מדי — המגבלה היא 10MB" },
+        { status: 400 }
+      );
+    }
+    const extracted = await extractText(body.fileName, buffer);
     if ("error" in extracted) {
       return NextResponse.json({ error: extracted.error }, { status: 400 });
     }
