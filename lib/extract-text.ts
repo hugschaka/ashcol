@@ -18,8 +18,22 @@ export async function extractText(
     const parser = new PDFParse({ data: buffer });
     try {
       const result = await parser.getText();
+      // PDF סרוק (תמונה ללא שכבת טקסט) — getText מצליח אך מחזיר ריק
+      if (!result.text || result.text.trim().length === 0) {
+        return {
+          error:
+            "ה-PDF כנראה סרוק (תמונה של דף, בלי טקסט שאפשר להעתיק). " +
+            "פתחו אותו, סמנו והעתיקו את הטקסט להדבקה כאן, או העלו קובץ Word/טקסט.",
+        };
+      }
       return { text: result.text };
-    } catch {
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      // לוג לאבחון (stderr → docker logs)
+      console.error(`[extract-text] PDF "${fileName}" נכשל: ${msg}`);
+      if (/password/i.test(msg)) {
+        return { error: "ה-PDF מוגן בסיסמה — הסירו את ההגנה ונסו שוב" };
+      }
       return { error: "לא הצלחנו לקרוא את ה-PDF — ודאו שהקובץ תקין" };
     } finally {
       await parser.destroy().catch(() => {});
