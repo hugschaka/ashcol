@@ -27,9 +27,7 @@ export async function extractText(
         .trim();
       if (meaningful.length < 30) {
         return {
-          error:
-            "ה-PDF כנראה סרוק (תמונה של דף, בלי טקסט שאפשר להעתיק). " +
-            "פתחו אותו, סמנו והעתיקו את הטקסט להדבקה כאן, או העלו קובץ Word/טקסט.",
+          error: "חומר סרוק — נא להעלות קובץ מקורי או להעתיק את הטקסט.",
         };
       }
       return { text };
