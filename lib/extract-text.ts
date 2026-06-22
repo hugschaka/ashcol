@@ -17,6 +17,7 @@ export async function extractText(
   if (name.endsWith(".pdf")) {
     const parser = new PDFParse({ data: buffer });
     try {
+      const result = await parser.getText();
       const text = result.text ?? "";
       // PDF סרוק (תמונה ללא שכבת טקסט): pdf-parse מסמן עמודים ב-"-- N of M --"
       // ומחזיר רק את הסימונים בלי טקסט אמיתי. מסירים אותם ובודקים מה נשאר.
