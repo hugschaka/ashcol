@@ -17,16 +17,21 @@ export async function extractText(
   if (name.endsWith(".pdf")) {
     const parser = new PDFParse({ data: buffer });
     try {
-      const result = await parser.getText();
-      // PDF סרוק (תמונה ללא שכבת טקסט) — getText מצליח אך מחזיר ריק
-      if (!result.text || result.text.trim().length === 0) {
+      const text = result.text ?? "";
+      // PDF סרוק (תמונה ללא שכבת טקסט): pdf-parse מסמן עמודים ב-"-- N of M --"
+      // ומחזיר רק את הסימונים בלי טקסט אמיתי. מסירים אותם ובודקים מה נשאר.
+      const meaningful = text
+        .replace(/--\s*\d+\s*of\s*\d+\s*--/gi, "")
+        .replace(/\s+/g, " ")
+        .trim();
+      if (meaningful.length < 30) {
         return {
           error:
             "ה-PDF כנראה סרוק (תמונה של דף, בלי טקסט שאפשר להעתיק). " +
             "פתחו אותו, סמנו והעתיקו את הטקסט להדבקה כאן, או העלו קובץ Word/טקסט.",
         };
       }
-      return { text: result.text };
+      return { text };
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       // לוג לאבחון (stderr → docker logs)
